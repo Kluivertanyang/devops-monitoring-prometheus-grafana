@@ -1,0 +1,27 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: flask-app-alerts
+  namespace: monitoring
+  labels:
+    release: monitoring
+spec:
+  groups:
+  - name: flask.rules
+    rules:
+    - alert: FlaskHighErrorRate
+      expr: rate(flask_http_request_total{status="500"}[5m]) > 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High error rate on Flask app"
+        description: "Flask app is returning 500 errors"
+    - alert: FlaskAppDown
+      expr: absent(up{job="flask-monitor-app"})
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Flask app is down"
+        description: "Flask app has been unreachable for more than 1 minute"
