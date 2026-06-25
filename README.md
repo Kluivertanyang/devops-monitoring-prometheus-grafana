@@ -107,21 +107,89 @@ Visit http://localhost:5001/metrics to confirm Prometheus metrics are exposed.
 ---
 
 ## Step 5 — Deploy Flask App to Kubernetes
-Coming next
+
+Create the namespace and deploy the Flask app with 2 replicas:
+
+    kubectl apply -f k8s/namespace.yaml
+    kubectl apply -f k8s/flask-deployment.yaml
+    kubectl apply -f k8s/flask-service.yaml
+    kubectl apply -f k8s/flask-servicemonitor.yaml
+
+Verify both pods are running:
+
+    kubectl get pods -n monitoring
+
+Expected output: both pods show 1/1 Running
+
+![Pods Running](./screenshots/07-pods-running.png)
+
+![Flask on Kubernetes](./screenshots/08-flask-on-kubernetes.png)
+
+---
 
 ## Step 6 — Install Prometheus and Grafana
-Coming next
+
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    helm repo update
+    helm install monitoring prometheus-community/kube-prometheus-stack \
+      --namespace monitoring \
+      --set grafana.adminPassword=admin123 \
+      --set prometheus.prometheusSpec.scrapeInterval=15s
+
+Wait for all pods to be running then access Prometheus:
+
+    kubectl port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090 -n monitoring
+
+Open http://localhost:9090/targets — Flask app shows 2/2 UP:
+
+![All pods running](./screenshots/09-all-pods-running.png)
+
+![Prometheus Flask targets UP](./screenshots/11-prometheus-flask-targets-up.png)
+
+---
 
 ## Step 7 — View Grafana Dashboard
-Coming next
+
+    kubectl port-forward svc/monitoring-grafana 3000:80 -n monitoring
+
+Open http://localhost:3000 — login with admin / admin123
+
+![Grafana Dashboard](./screenshots/10-grafana-dashboard.png)
+
+![Flask Metrics Graph](./screenshots/12-grafana-flask-metrics.png)
+
+---
 
 ## Step 8 — Trigger and View Alerts
-Coming next
+
+Apply alert rules then scale Flask to zero to trigger FlaskAppDown:
+
+    kubectl apply -f k8s/alert-rules.yaml
+    kubectl scale deployment flask-monitor-app --replicas=0 -n monitoring
+
+Wait 1 minute and check http://localhost:9090/alerts:
+
+![Alert Firing](./screenshots/14-alert-firing.png)
+
+Restore the app:
+
+    kubectl scale deployment flask-monitor-app --replicas=2 -n monitoring
 
 ---
 
 ## Challenges and Solutions
-To be filled as we encounter real issues
+
+| Challenge | Solution |
+|-----------|---------|
+| Port 5000 blocked on Mac M2 | Used port 5001 — Mac reserves 5000 for AirPlay |
+| Prometheus not scraping Flask pods | Added ServiceMonitor with release: monitoring label |
+| FlaskAppDown alert not firing with up == 0 | Used absent() — metric disappears when pods scale to zero |
+| Nested folder appearing in git | Added folder to .gitignore permanently |
 
 ## What I Learned
-To be filled at project completion
+
+- Prometheus uses a pull model — it scrapes targets rather than receiving pushed metrics
+- ServiceMonitor is how Prometheus discovers custom apps in Kubernetes
+- The absent() function is more reliable than up == 0 for detecting completely down services
+- Docker layer caching speeds up builds — always copy requirements before app code
+- Running containers as non-root users is a security best practice
